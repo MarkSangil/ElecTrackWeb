@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1058801480700",
+    "project_id": "electrack-f1425",
+    "storage_bucket": "electrack-f1425.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058801480700:android:5711c4de7542b364fcf879",
+        "android_client_info": {
+          "package_name": "com.example.electrack_mob"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXqXXQQlyfYxWCuGaVX5lSbPM77vXHqbk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058801480700:android:cf7ff23f68dfcf65fcf879",
+        "android_client_info": {
+          "package_name": "com.example.my_flutter_web_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXqXXQQlyfYxWCuGaVX5lSbPM77vXHqbk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
