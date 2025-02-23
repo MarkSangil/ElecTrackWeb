@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:my_flutter_web_app/DashboardPage.dart';
+import 'package:my_flutter_web_app/LoginPage.dart';
+import 'package:my_flutter_web_app/ProfilePage.dart';
+import 'package:my_flutter_web_app/RegisterPage.dart';
 import 'firebase_options.dart';
-import 'RegisterPage.dart';
-import 'DashboardPage.dart';
-import 'LoginPage.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,7 @@ class MyApp extends StatelessWidget {
         '/': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/dashboard': (context) => const DashboardPage(),
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }
