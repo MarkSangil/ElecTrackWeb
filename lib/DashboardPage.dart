@@ -39,20 +39,35 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _fetchWattsLimit() async {
-    User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      DocumentSnapshot userData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
+    // Quick sanity check to confirm method is called
+    debugPrint("DEBUG: _fetchWattsLimit() called.");
 
-      if (userData.exists) {
-        setState(() {
-          _wattsLimit = (userData['wattsLimit'] as num?)?.toDouble() ?? 0.0;
-          _isLoading = false;
-        });
-        _consumptionAlertService.checkConsumptionAndAlert();
-      }
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      debugPrint("DEBUG: No currentUser found. Exiting _fetchWattsLimit().");
+      return;
+    }
+    debugPrint("DEBUG: Current user UID: ${currentUser.uid}");
+
+    DocumentSnapshot userData = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+
+    if (userData.exists) {
+      final data = userData.data() as Map<String, dynamic>? ?? {};
+      debugPrint("DEBUG: user doc data: $data");
+
+      setState(() {
+        _wattsLimit = (data['wattsLimit'] as num?)?.toDouble() ?? 0.0;
+        _isLoading = false;
+      });
+
+      // Now we check consumption after we fetch the user's limit
+      debugPrint("DEBUG: _wattsLimit is $_wattsLimit. Calling checkConsumptionAndAlert()...");
+      _consumptionAlertService.checkConsumptionAndAlert();
+    } else {
+      debugPrint("DEBUG: user doc does NOT exist for this UID.");
     }
   }
 
