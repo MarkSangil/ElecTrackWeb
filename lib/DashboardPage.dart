@@ -2,27 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_flutter_web_app/consumption_alert_service.dart';
+import 'package:my_flutter_web_app/app_theme.dart';
+import 'package:my_flutter_web_app/watt_timer.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({Key? key}) : super(key: key);
 
   @override
   _DashboardPageState createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  TextEditingController _applianceController = TextEditingController();
-  TextEditingController _wattsController = TextEditingController();
+  final ConsumptionAlertService _consumptionAlertService = ConsumptionAlertService();
+  final TextEditingController _applianceController = TextEditingController();
+  final TextEditingController _wattsController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-  final ConsumptionAlertService _consumptionAlertService = ConsumptionAlertService();
   double _wattsLimit = 0.0;
   bool _isLoading = true;
+
+  // Create a ScrollController for horizontal scrolling.
+  final ScrollController _tableScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _fetchWattsLimit();
+  }
+
+  @override
+  void dispose() {
+    _applianceController.dispose();
+    _wattsController.dispose();
+    _tableScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchWattsLimit() async {
@@ -36,11 +49,24 @@ class _DashboardPageState extends State<DashboardPage> {
       if (userData.exists) {
         setState(() {
           _wattsLimit = (userData['wattsLimit'] as num?)?.toDouble() ?? 0.0;
-          _isLoading = false; // ✅ Finish loading
+          _isLoading = false;
         });
-        _consumptionAlertService.checkConsumptionAndAlert(); // ✅ Run check
+        _consumptionAlertService.checkConsumptionAndAlert();
       }
     }
+  }
+
+  void _openTimerPage(String docId, Map<String, dynamic> applianceData) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimerPage(
+          docId: docId,
+          applianceName: applianceData['appliance'] ?? 'Unknown Appliance',
+          wattRating: (applianceData['watts'] ?? 0).toDouble(),
+        ),
+      ),
+    );
   }
 
   void _showAddApplianceDialog(BuildContext context) {
@@ -52,22 +78,27 @@ class _DashboardPageState extends State<DashboardPage> {
             return AlertDialog(
               title: const Text("Add Appliance"),
               content: SingleChildScrollView(
-                child: ListBody(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     TextField(
                       controller: _applianceController,
                       decoration: const InputDecoration(labelText: 'Appliance'),
                     ),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _wattsController,
                       decoration: const InputDecoration(labelText: 'Watts'),
                       keyboardType: TextInputType.number,
                     ),
+                    const SizedBox(height: 8),
                     ListTile(
                       title: const Text('Select Time'),
-                      subtitle: Text(_selectedTime != null
-                          ? "${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}"
-                          : 'No time chosen'),
+                      subtitle: Text(
+                        _selectedTime != null
+                            ? "${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}"
+                            : 'No time chosen',
+                      ),
                       onTap: () async {
                         TimeOfDay? pickedTime = await showTimePicker(
                           context: context,
@@ -75,7 +106,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           builder: (BuildContext context, Widget? child) {
                             return MediaQuery(
                               data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-                              child: child ?? const Text(""),
+                              child: child ?? const SizedBox(),
                             );
                           },
                         );
@@ -88,9 +119,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     ListTile(
                       title: const Text('Select Date'),
-                      subtitle: Text(_selectedDate != null
-                          ? "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}"
-                          : 'No date chosen'),
+                      subtitle: Text(
+                        _selectedDate != null
+                            ? "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}"
+                            : 'No date chosen',
+                      ),
                       onTap: () async {
                         DateTime? pickedDate = await showDatePicker(
                           context: context,
@@ -130,6 +163,27 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Future<void> _deleteAppliance(String docId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('appliances')
+          .doc(docId)
+          .delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Appliance deleted.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete: $e')),
+      );
+    }
+  }
+
   void saveApplianceData() async {
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
@@ -137,7 +191,7 @@ class _DashboardPageState extends State<DashboardPage> {
       double hoursUsed = _selectedTime != null
           ? _selectedTime!.hour + (_selectedTime!.minute / 60)
           : 0;
-      double consumption = (watts / 1000) * hoursUsed; // kWh calculation
+      double consumption = (watts / 1000) * hoursUsed;
 
       String formattedTime = _selectedTime != null
           ? "${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}"
@@ -148,10 +202,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
       Map<String, dynamic> applianceData = {
         'appliance': _applianceController.text,
-        'watts': watts.toDouble(),  // Ensure it's always stored as double
+        'watts': watts.toDouble(),
         'time': formattedTime,
         'date': formattedDate,
-        'consumption': consumption.toDouble()  // Ensure it's always stored as double
+        'consumption': consumption.toDouble(),
       };
 
       FirebaseFirestore.instance
@@ -160,12 +214,12 @@ class _DashboardPageState extends State<DashboardPage> {
           .collection('appliances')
           .add(applianceData)
           .then((docRef) {
-        print("Document written with ID: ${docRef.id}");
+        debugPrint("Document written with ID: ${docRef.id}");
       }).catchError((error) {
-        print("Error adding document: $error");
+        debugPrint("Error adding document: $error");
       });
     } else {
-      print("No user logged in.");
+      debugPrint("No user logged in.");
     }
   }
 
@@ -188,7 +242,8 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-    ) ?? false;
+    ) ??
+        false;
   }
 
   @override
@@ -205,8 +260,6 @@ class _DashboardPageState extends State<DashboardPage> {
           backgroundColor: Colors.black,
           elevation: 5,
         ),
-
-        // ✅ Add this after appBar
         drawer: Drawer(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -231,8 +284,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 leading: const Icon(Icons.add),
                 title: const Text('Add Appliance'),
                 onTap: () {
-                  Navigator.pop(context); // Close drawer
-                  _showAddApplianceDialog(context); // ✅ Call function
+                  Navigator.pop(context);
+                  _showAddApplianceDialog(context);
                 },
               ),
               ListTile(
@@ -247,130 +300,199 @@ class _DashboardPageState extends State<DashboardPage> {
                 leading: const Icon(Icons.logout),
                 title: const Text('Logout'),
                 onTap: () async {
-                  bool shouldLogout = await _showLogoutConfirmationDialog(context); // ✅ Call function
+                  Navigator.pop(context); // Close the drawer
+                  bool shouldLogout = await _showLogoutConfirmationDialog(context);
                   if (shouldLogout) {
-                    FirebaseAuth.instance.signOut();
-                    Navigator.of(context).pop();
+                    await FirebaseAuth.instance.signOut();
+                    Navigator.pushReplacementNamed(context, '/');
                   }
                 },
               ),
             ],
           ),
         ),
-        body: SafeArea(
-          child: Stack(
-              children: [
-          // ✅ Background Image Layer
-          Positioned.fill(
-          child: Container(
-          decoration: BoxDecoration(
-          image: DecorationImage(
-          image: AssetImage('assets/ElecTrack.png'), // ✅ Replace with your image
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(
-            Colors.white.withOpacity(0.7),
-            BlendMode.lighten, // ✅ Adjust blend mode if needed
-          ),
-        ),
-      ),
-    ),
-    ),
-
-    _isLoading
-              ? const Center(child: CircularProgressIndicator()) // ✅ Show loader while fetching data
-              : StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('appliances')
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Center(child: Text('Something went wrong'));
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(
-                  child: Text("No appliances found",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                );
-              }
-
-              return Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  children: [
-                    Table(
-                      columnWidths: const {
-                        0: FlexColumnWidth(1.5),
-                        1: FlexColumnWidth(),
-                        2: FlexColumnWidth(),
-                        3: FlexColumnWidth(),
-                        4: FlexColumnWidth(1.5),
-                      },
-                      border: TableBorder.all(color: Colors.grey, width: 1),
-                      children: [
-                        TableRow(
-                          decoration: BoxDecoration(color: Colors.grey[300]),
-                          children: const [
-                            TableCell(child: Padding(padding: EdgeInsets.all(8), child: Text('Appliance', style: TextStyle(fontWeight: FontWeight.bold)))),
-                            TableCell(child: Padding(padding: EdgeInsets.all(8), child: Text('Watts', style: TextStyle(fontWeight: FontWeight.bold)))),
-                            TableCell(child: Padding(padding: EdgeInsets.all(8), child: Text('Time', style: TextStyle(fontWeight: FontWeight.bold)))),
-                            TableCell(child: Padding(padding: EdgeInsets.all(8), child: Text('Consumption', style: TextStyle(fontWeight: FontWeight.bold)))),
-                            TableCell(child: Padding(padding: EdgeInsets.all(8), child: Text('Date', style: TextStyle(fontWeight: FontWeight.bold)))),
-                          ],
-                        ),
-                        ...snapshot.data!.docs.map((DocumentSnapshot document) {
-                          Map<String, dynamic> data = document.data() as Map<String, dynamic>;
-
-                          double consumption = (data['consumption'] is num)
-                              ? (data['consumption'] as num).toDouble()
-                              : 0.0;
-
-                          bool exceedsLimit = consumption > _wattsLimit; // ✅ Check if exceeding limit
-
-                          return TableRow(
-                            children: [
-                              _buildTableCell(data['appliance'] ?? '', false),
-                              _buildTableCell((data['watts'] ?? 0).toString(), false),
-                              _buildTableCell(data['time'] ?? '', false),
-                              _buildTableCell(
-                                consumption.toStringAsFixed(2),
-                                exceedsLimit, // ✅ Highlights if exceeding limit
-                              ),
-                              _buildTableCell(data['date'] ?? '', false),
-                            ],
-                          );
-                        }).toList(),
-                      ],
+        body: Stack(
+          children: [
+            // Full-screen background layer
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/ElecTrack.png'),
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.white.withOpacity(0.7),
+                      BlendMode.lighten,
                     ),
-                  ],
+                  ),
                 ),
-              );
-            },
-          ),
-      ],
-          )
+              ),
+            ),
+            // Main content with both horizontal and vertical scrolling
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: constraints.maxWidth,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: _buildMainContent(),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showAddApplianceDialog(context),
+          backgroundColor: AppTheme.lightGreen,
+          child: const Icon(Icons.add),
         ),
       ),
     );
   }
 
-  Widget _buildTableCell(String text, bool highlight) {
-    return TableCell(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Container(
-          color: highlight ? Colors.red[200] : Colors.transparent, // Highlight if exceeding limit
-          child: Text(
-            text,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: highlight ? Colors.red[900] : Colors.black, // Change text color if exceeded
+  Widget _buildMainContent() {
+    if (_isLoading) {
+      return const SizedBox(
+        height: 300,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: Card(
+          elevation: 3,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(FirebaseAuth.instance.currentUser?.uid)
+                  .collection('appliances')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Something went wrong'));
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No appliances found",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data!.docs;
+                return Scrollbar(
+                  controller: _tableScrollController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _tableScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 1200),
+                      child: DataTable(
+                        headingRowColor: MaterialStateProperty.all(AppTheme.lightGreen),
+                        headingTextStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        columns: const [
+                          DataColumn(label: Text('Appliance')),
+                          DataColumn(label: Text('Watts')),
+                          DataColumn(label: Text('Time')),
+                          DataColumn(label: Text('Consumption')),
+                          DataColumn(label: Text('Date')),
+                          DataColumn(label: Text('Actions')),
+                        ],
+                        rows: docs.map((doc) {
+                          final docId = doc.id;
+                          final data = doc.data() as Map<String, dynamic>;
+                          return DataRow(
+                            cells: [
+                              DataCell(Text(data['appliance'] ?? '')),
+                              DataCell(Text((data['watts'] ?? 0).toString())),
+                              DataCell(Text(data['time'] ?? '')),
+                              DataCell(Text((data['consumption'] ?? 0).toStringAsFixed(2))),
+                              DataCell(Text(data['date'] ?? '')),
+                              DataCell(
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () => _deleteAppliance(docId),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.timer, color: Colors.blue),
+                                      onPressed: () => _openTimerPage(docId, data),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
       ),
     );
   }
+}
 
+class TimerPage extends StatelessWidget {
+  final String docId;
+  final String applianceName;
+  final double wattRating;
+
+  const TimerPage({
+    Key? key,
+    required this.docId,
+    required this.applianceName,
+    required this.wattRating,
+  }) : super(key: key);
+
+  void _onTimerStop(double consumption) {
+    debugPrint('Timer stopped. Consumption: $consumption kWh');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Timer for $applianceName'),
+      ),
+      body: Center(
+        child: WattTimer(
+          docId: docId,
+          wattRating: wattRating,
+          applianceName: applianceName,
+          onTimerStop: _onTimerStop,
+        ),
+      ),
+    );
+  }
 }
