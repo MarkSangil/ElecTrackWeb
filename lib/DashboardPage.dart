@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:my_flutter_web_app/dashboard_service.dart';
 import 'package:my_flutter_web_app/consumption_alert_service.dart';
 import 'package:my_flutter_web_app/app_theme.dart';
 import 'package:my_flutter_web_app/watt_timer.dart';
@@ -14,15 +16,20 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   final ConsumptionAlertService _consumptionAlertService = ConsumptionAlertService();
+  final DashboardService _dashboardService = DashboardService();
+
   final TextEditingController _applianceController = TextEditingController();
   final TextEditingController _wattsController = TextEditingController();
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+
   double _wattsLimit = 0.0;
   bool _isLoading = true;
 
-  // Create a ScrollController for horizontal scrolling.
   final ScrollController _tableScrollController = ScrollController();
+
+  String _selectedFilter = 'Day';
 
   @override
   void initState() {
@@ -39,36 +46,42 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _fetchWattsLimit() async {
-    // Quick sanity check to confirm method is called
-    debugPrint("DEBUG: _fetchWattsLimit() called.");
+    final limit = await _dashboardService.fetchWattsLimit();
+    setState(() {
+      _wattsLimit = limit;
+      _isLoading = false;
+    });
+    _consumptionAlertService.checkConsumptionAndAlert();
+  }
 
-    User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      debugPrint("DEBUG: No currentUser found. Exiting _fetchWattsLimit().");
-      return;
-    }
-    debugPrint("DEBUG: Current user UID: ${currentUser.uid}");
+  Future<void> _saveApplianceData() async {
+    final watts = double.tryParse(_wattsController.text) ?? 0;
+    final hoursUsed = _selectedTime != null
+        ? _selectedTime!.hour + (_selectedTime!.minute / 60)
+        : 0;
+    final consumption = (watts / 1000) * hoursUsed;
 
-    DocumentSnapshot userData = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUser.uid)
-        .get();
+    final formattedTime = _selectedTime != null
+        ? "${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}"
+        : '';
+    final formattedDate = _selectedDate != null
+        ? "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}"
+        : '';
 
-    if (userData.exists) {
-      final data = userData.data() as Map<String, dynamic>? ?? {};
-      debugPrint("DEBUG: user doc data: $data");
+    await _dashboardService.addAppliance(
+      applianceName: _applianceController.text,
+      watts: watts,
+      time: formattedTime,
+      date: formattedDate,
+      consumption: consumption,
+    );
+  }
 
-      setState(() {
-        _wattsLimit = (data['wattsLimit'] as num?)?.toDouble() ?? 0.0;
-        _isLoading = false;
-      });
-
-      // Now we check consumption after we fetch the user's limit
-      debugPrint("DEBUG: _wattsLimit is $_wattsLimit. Calling checkConsumptionAndAlert()...");
-      _consumptionAlertService.checkConsumptionAndAlert();
-    } else {
-      debugPrint("DEBUG: user doc does NOT exist for this UID.");
-    }
+  Future<void> _deleteAppliance(String docId) async {
+    await _dashboardService.deleteAppliance(docId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Appliance deleted.')),
+    );
   }
 
   void _openTimerPage(String docId, Map<String, dynamic> applianceData) {
@@ -84,10 +97,31 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Future<bool> _showLogoutConfirmationDialog(BuildContext context) async {
+    return await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Logout"),
+        content: const Text("Are you sure you want to logout?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    ) ??
+        false;
+  }
+
   void _showAddApplianceDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -115,7 +149,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             : 'No time chosen',
                       ),
                       onTap: () async {
-                        TimeOfDay? pickedTime = await showTimePicker(
+                        final pickedTime = await showTimePicker(
                           context: context,
                           initialTime: _selectedTime ?? const TimeOfDay(hour: 0, minute: 0),
                           builder: (BuildContext context, Widget? child) {
@@ -126,9 +160,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           },
                         );
                         if (pickedTime != null) {
-                          setDialogState(() {
-                            _selectedTime = pickedTime;
-                          });
+                          setDialogState(() => _selectedTime = pickedTime);
                         }
                       },
                     ),
@@ -140,16 +172,14 @@ class _DashboardPageState extends State<DashboardPage> {
                             : 'No date chosen',
                       ),
                       onTap: () async {
-                        DateTime? pickedDate = await showDatePicker(
+                        final pickedDate = await showDatePicker(
                           context: context,
                           initialDate: _selectedDate ?? DateTime.now(),
                           firstDate: DateTime(2000),
                           lastDate: DateTime(2100),
                         );
                         if (pickedDate != null) {
-                          setDialogState(() {
-                            _selectedDate = pickedDate;
-                          });
+                          setDialogState(() => _selectedDate = pickedDate);
                         }
                       },
                     ),
@@ -159,14 +189,12 @@ class _DashboardPageState extends State<DashboardPage> {
               actions: <Widget>[
                 TextButton(
                   child: const Text('Cancel'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
                 TextButton(
                   child: const Text('Save'),
                   onPressed: () {
-                    saveApplianceData();
+                    _saveApplianceData();
                     Navigator.of(context).pop();
                   },
                 ),
@@ -178,303 +206,431 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Future<void> _deleteAppliance(String docId) async {
+  Widget _buildSidebar(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('appliances')
-          .doc(docId)
-          .delete();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Appliance deleted.')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete: $e')),
-      );
-    }
-  }
-
-  void saveApplianceData() async {
-    User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      double watts = double.tryParse(_wattsController.text) ?? 0;
-      double hoursUsed = _selectedTime != null
-          ? _selectedTime!.hour + (_selectedTime!.minute / 60)
-          : 0;
-      double consumption = (watts / 1000) * hoursUsed;
-
-      String formattedTime = _selectedTime != null
-          ? "${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}"
-          : '';
-      String formattedDate = _selectedDate != null
-          ? "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}"
-          : '';
-
-      Map<String, dynamic> applianceData = {
-        'appliance': _applianceController.text,
-        'watts': watts.toDouble(),
-        'time': formattedTime,
-        'date': formattedDate,
-        'consumption': consumption.toDouble(),
-      };
-
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .collection('appliances')
-          .add(applianceData)
-          .then((docRef) {
-        debugPrint("Document written with ID: ${docRef.id}");
-      }).catchError((error) {
-        debugPrint("Error adding document: $error");
-      });
-    } else {
-      debugPrint("No user logged in.");
-    }
-  }
-
-  Future<bool> _showLogoutConfirmationDialog(BuildContext context) async {
-    return await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Logout"),
-        content: const Text("Are you sure you want to logout?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
+    if (user == null) {
+      return Container(
+        width: 250,
+        color: AppTheme.primaryBlue,
+        child: const Center(
+          child: Text(
+            "No user logged in",
+            style: TextStyle(color: Colors.white),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(true);
+        ),
+      );
+    }
+
+    final userDocStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots();
+
+    return Container(
+      width: 250,
+      color: AppTheme.primaryBlue,
+      child: Column(
+        children: [
+          const SizedBox(height: 60),
+          StreamBuilder<DocumentSnapshot>(
+            stream: userDocStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator(color: Colors.white);
+              }
+              if (!snapshot.hasData || !snapshot.data!.exists) {
+                return const Text(
+                  'No profile data',
+                  style: TextStyle(color: Colors.white),
+                );
+              }
+              final data = snapshot.data!.data() as Map<String, dynamic>?;
+              if (data == null) {
+                return const Text(
+                  'No data',
+                  style: TextStyle(color: Colors.white),
+                );
+              }
+              final avatarBase64 = data['avatarBase64'] as String?;
+              final userName = data['name'] as String? ?? 'Unnamed User';
+
+              Widget avatarWidget;
+              if (avatarBase64 != null && avatarBase64.isNotEmpty) {
+                final decodedBytes = base64Decode(avatarBase64);
+                avatarWidget = CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.white,
+                  child: ClipOval(
+                    child: Image.memory(
+                      decodedBytes,
+                      fit: BoxFit.cover,
+                      width: 80,
+                      height: 80,
+                    ),
+                  ),
+                );
+              } else {
+                avatarWidget = const CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.white,
+                  child: Icon(
+                    Icons.person,
+                    color: Colors.black,
+                    size: 40,
+                  ),
+                );
+              }
+
+              return Column(
+                children: [
+                  const SizedBox(height: 12),
+                  avatarWidget,
+                  const SizedBox(height: 12),
+                  Text(
+                    userName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              );
             },
-            child: const Text("Logout"),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add, color: Colors.white),
+            title: const Text('Add Appliance', style: TextStyle(color: Colors.white)),
+            onTap: () => _showAddApplianceDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person, color: Colors.white),
+            title: const Text('Profile', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pushNamed(context, '/profile');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.white),
+            title: const Text('Logout', style: TextStyle(color: Colors.white)),
+            onTap: () async {
+              final shouldLogout = await _showLogoutConfirmationDialog(context);
+              if (shouldLogout) {
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushReplacementNamed(context, '/');
+              }
+            },
           ),
         ],
       ),
-    ) ??
-        false;
+    );
+  }
+
+  Widget _buildFilterDropdown() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        const Text('Filter by: ', style: TextStyle(fontWeight: FontWeight.bold)),
+        DropdownButton<String>(
+          value: _selectedFilter,
+          items: const [
+            DropdownMenuItem(child: Text('Day'), value: 'Day'),
+            DropdownMenuItem(child: Text('Week'), value: 'Week'),
+            DropdownMenuItem(child: Text('Month'), value: 'Month'),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _selectedFilter = value;
+              });
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  List<QueryDocumentSnapshot> _filterDocs(
+      List<QueryDocumentSnapshot> docs,
+      String filterType,
+      ) {
+    final now = DateTime.now();
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final dateStr = data['date'] as String? ?? '';
+      final parts = dateStr.split('-');
+      if (parts.length != 3) return false;
+      final year = int.tryParse(parts[0]) ?? 0;
+      final month = int.tryParse(parts[1]) ?? 0;
+      final day = int.tryParse(parts[2]) ?? 0;
+      final docDate = DateTime(year, month, day);
+
+      switch (filterType) {
+        case 'Day':
+          return (docDate.year == now.year &&
+              docDate.month == now.month &&
+              docDate.day == now.day);
+        case 'Week':
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final endOfWeek = startOfWeek.add(const Duration(days: 7));
+          return (docDate.isAtSameMomentAs(startOfWeek) ||
+              (docDate.isAfter(startOfWeek) && docDate.isBefore(endOfWeek)));
+        case 'Month':
+          return (docDate.year == now.year && docDate.month == now.month);
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
+  Widget _buildMainContent(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFilterDropdown(),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                margin: const EdgeInsets.all(16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(FirebaseAuth.instance.currentUser?.uid)
+                        .collection('appliances')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(child: Text('Something went wrong'));
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            "No appliances found",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      }
+                      final allDocs = snapshot.data!.docs;
+                      final filteredDocs = _filterDocs(allDocs, _selectedFilter);
+
+                      if (filteredDocs.isEmpty) {
+                        return const Center(child: Text('No data for this filter.'));
+                      }
+
+                      return Scrollbar(
+                        controller: _tableScrollController,
+                        thumbVisibility: true,
+                        trackVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _tableScrollController,
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 1200),
+                            child: DataTable(
+                              headingRowColor: MaterialStateProperty.all(AppTheme.lightGreen),
+                              headingTextStyle: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              columns: const [
+                                DataColumn(label: Text('Appliance')),
+                                DataColumn(label: Text('Watts')),
+                                DataColumn(label: Text('Time')),
+                                DataColumn(label: Text('Consumption')),
+                                DataColumn(label: Text('Date')),
+                                DataColumn(label: Text('Actions')),
+                              ],
+                              rows: filteredDocs.map((doc) {
+                                final docId = doc.id;
+                                final data = doc.data() as Map<String, dynamic>;
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(data['appliance'] ?? '')),
+                                    DataCell(Text((data['watts'] ?? 0).toString())),
+                                    DataCell(Text(data['time'] ?? '')),
+                                    DataCell(Text((data['consumption'] ?? 0).toStringAsFixed(2))),
+                                    DataCell(Text(data['date'] ?? '')),
+                                    DataCell(
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.delete, color: Colors.red),
+                                            onPressed: () => _deleteAppliance(docId),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.timer, color: Colors.blue),
+                                            onPressed: () => _openTimerPage(docId, data),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        FirebaseAuth.instance.signOut();
-        Navigator.of(context).pop();
-        return false;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('ElecTrack', style: TextStyle(color: Colors.white)),
-          backgroundColor: Colors.black,
-          elevation: 5,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bool isWide = screenWidth > 800;
+
+    if (isWide) {
+      return WillPopScope(
+        onWillPop: () async {
+          await FirebaseAuth.instance.signOut();
+          Navigator.of(context).pop();
+          return false;
+        },
+        child: Scaffold(
+          body: Row(
+            children: [
+              _buildSidebar(context),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildMainContent(context),
+                ),
+              ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _showAddApplianceDialog(context),
+            backgroundColor: AppTheme.lightGreen,
+            child: const Icon(Icons.add),
+          ),
         ),
-        drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: <Widget>[
-              Container(
-                height: 100,
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(color: Colors.black),
-                child: const Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Text(
-                    'ElecTrack Menu',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
+      );
+    } else {
+      return WillPopScope(
+        onWillPop: () async {
+          await FirebaseAuth.instance.signOut();
+          Navigator.of(context).pop();
+          return false;
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('ElecTrack', style: TextStyle(color: Colors.white)),
+            elevation: 5,
+          ),
+          drawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                Container(
+                  height: 100,
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: AppTheme.primaryBlue),
+                  child: const Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      'ElecTrack Menu',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                      ),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Add Appliance'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showAddApplianceDialog(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person),
+                  title: const Text('Profile'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/profile');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('Logout'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final shouldLogout = await _showLogoutConfirmationDialog(context);
+                    if (shouldLogout) {
+                      await FirebaseAuth.instance.signOut();
+                      Navigator.pushReplacementNamed(context, '/');
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: const AssetImage('assets/ElecTrack.png'),
+                      fit: BoxFit.cover,
+                      colorFilter: ColorFilter.mode(
+                        Colors.white.withOpacity(0.7),
+                        BlendMode.lighten,
+                      ),
                     ),
                   ),
                 ),
               ),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('Add Appliance'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showAddApplianceDialog(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.person),
-                title: const Text('Profile'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/profile');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout),
-                title: const Text('Logout'),
-                onTap: () async {
-                  Navigator.pop(context); // Close the drawer
-                  bool shouldLogout = await _showLogoutConfirmationDialog(context);
-                  if (shouldLogout) {
-                    await FirebaseAuth.instance.signOut();
-                    Navigator.pushReplacementNamed(context, '/');
-                  }
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: _buildMainContent(context),
+                        ),
+                      ),
+                    ),
+                  );
                 },
               ),
             ],
           ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _showAddApplianceDialog(context),
+            backgroundColor: AppTheme.lightGreen,
+            child: const Icon(Icons.add),
+          ),
         ),
-        body: Stack(
-          children: [
-            // Full-screen background layer
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/ElecTrack.png'),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.white.withOpacity(0.7),
-                      BlendMode.lighten,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Main content with both horizontal and vertical scrolling
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: constraints.maxWidth,
-                    ),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: _buildMainContent(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _showAddApplianceDialog(context),
-          backgroundColor: AppTheme.lightGreen,
-          child: const Icon(Icons.add),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMainContent() {
-    if (_isLoading) {
-      return const SizedBox(
-        height: 300,
-        child: Center(child: CircularProgressIndicator()),
       );
     }
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1200),
-        child: Card(
-          elevation: 3,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(FirebaseAuth.instance.currentUser?.uid)
-                  .collection('appliances')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Something went wrong'));
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No appliances found",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  );
-                }
-
-                final docs = snapshot.data!.docs;
-                return Scrollbar(
-                  controller: _tableScrollController,
-                  thumbVisibility: true,
-                  trackVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _tableScrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 1200),
-                      child: DataTable(
-                        headingRowColor: MaterialStateProperty.all(AppTheme.lightGreen),
-                        headingTextStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        columns: const [
-                          DataColumn(label: Text('Appliance')),
-                          DataColumn(label: Text('Watts')),
-                          DataColumn(label: Text('Time')),
-                          DataColumn(label: Text('Consumption')),
-                          DataColumn(label: Text('Date')),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: docs.map((doc) {
-                          final docId = doc.id;
-                          final data = doc.data() as Map<String, dynamic>;
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(data['appliance'] ?? '')),
-                              DataCell(Text((data['watts'] ?? 0).toString())),
-                              DataCell(Text(data['time'] ?? '')),
-                              DataCell(Text((data['consumption'] ?? 0).toStringAsFixed(2))),
-                              DataCell(Text(data['date'] ?? '')),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _deleteAppliance(docId),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.timer, color: Colors.blue),
-                                      onPressed: () => _openTimerPage(docId, data),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

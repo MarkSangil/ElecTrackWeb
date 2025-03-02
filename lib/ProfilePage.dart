@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -22,7 +25,9 @@ class _ProfilePageState extends State<ProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Load user data on init
+  // For storing the user's avatar in base64
+  String? _avatarBase64;
+
   @override
   void initState() {
     super.initState();
@@ -35,17 +40,49 @@ class _ProfilePageState extends State<ProfilePage> {
     if (currentUser == null) return;
 
     try {
-      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final userDoc =
+      await _firestore.collection('users').doc(currentUser.uid).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
         setState(() {
           _nameController.text = data['name'] ?? '';
           _wattsLimitController.text = data['wattsLimit']?.toString() ?? '';
           _isWattsLimitEnabled = data['isWattsLimitEnabled'] ?? false;
+          _avatarBase64 = data['avatarBase64'];
         });
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
+    }
+  }
+
+  // Pick an image from the gallery, then store it in Firestore as base64
+  Future<void> _pickAvatarImage() async {
+    try {
+      final picker = ImagePicker();
+      final pickedImage = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+      );
+      if (pickedImage == null) return;
+
+      // Convert to bytes, then to base64
+      final bytes = await File(pickedImage.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      // Update state and Firestore
+      setState(() {
+        _avatarBase64 = base64String;
+      });
+
+      final currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'avatarBase64': base64String,
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking avatar: $e');
     }
   }
 
@@ -61,6 +98,9 @@ class _ProfilePageState extends State<ProfilePage> {
           'wattsLimit': int.tryParse(_wattsLimitController.text) ?? 0,
           'isWattsLimitEnabled': _isWattsLimitEnabled,
           'email': currentUser.email,
+          // We already store avatarBase64 separately in _pickAvatarImage(),
+          // but you could also store it here if needed:
+          // 'avatarBase64': _avatarBase64,
         },
         SetOptions(merge: true),
       );
@@ -82,11 +122,38 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Main UI
+  // Build the main UI
   @override
   Widget build(BuildContext context) {
+    // Decode avatar if available
+    Widget avatarWidget;
+    if (_avatarBase64 != null && _avatarBase64!.isNotEmpty) {
+      final decodedBytes = base64Decode(_avatarBase64!);
+      avatarWidget = CircleAvatar(
+        radius: 60,
+        backgroundColor: Colors.grey.shade300,
+        child: ClipOval(
+          child: Image.memory(
+            decodedBytes,
+            fit: BoxFit.cover,
+            width: 120,
+            height: 120,
+          ),
+        ),
+      );
+    } else {
+      avatarWidget = const CircleAvatar(
+        radius: 60,
+        backgroundColor: Colors.grey,
+        child: Icon(
+          Icons.person,
+          size: 60,
+          color: Colors.white,
+        ),
+      );
+    }
+
     return Scaffold(
-      // Make sure the background can extend behind the app bar
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -121,6 +188,19 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 40),
+                      // Avatar + Upload Button
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          avatarWidget,
+                          IconButton(
+                            icon: const Icon(Icons.camera_alt, color: Colors.white),
+                            onPressed: _pickAvatarImage,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+
                       // First card: name/email
                       Card(
                         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -157,6 +237,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                       ),
+
                       // Second card: power settings
                       Card(
                         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -207,6 +288,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                       ),
+
                       // Save button
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),

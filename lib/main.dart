@@ -5,7 +5,7 @@ import 'package:my_flutter_web_app/LoginPage.dart';
 import 'package:my_flutter_web_app/ProfilePage.dart';
 import 'package:my_flutter_web_app/RegisterPage.dart';
 import 'firebase_options.dart';
-
+import 'package:my_flutter_web_app/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,10 +23,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'ElecTrack',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.themeData, // Use your custom AppTheme here
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginPage(),
