@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'app_theme.dart'; // Import your theme file
+import 'app_theme.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({Key? key}) : super(key: key);
@@ -28,26 +28,21 @@ class _RegisterPageState extends State<RegisterPage> {
   void _register() async {
     if (_formKey.currentState!.validate()) {
       try {
-        // Create user with email and password
         UserCredential userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        // Add user details to Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userCredential.user!.uid)
             .set({
           'email': _emailController.text.trim(),
-          // Add more fields if needed
         });
 
-        // Navigate to home (or wherever)
         Navigator.pushNamed(context, '/');
       } on FirebaseAuthException catch (e) {
-        // Show a snack bar with the error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Registration error: ${e.message}')),
         );
@@ -62,16 +57,13 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      // Disable the debug banner
       debugShowCheckedModeBanner: false,
-      // Apply the custom theme
       theme: AppTheme.themeData,
       home: Scaffold(
         body: SingleChildScrollView(
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              // A card to group the form visually
               child: Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

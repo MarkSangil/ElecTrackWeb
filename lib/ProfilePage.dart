@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:my_flutter_web_app/ConsumptionCalculatorModal.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -14,18 +15,14 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Controllers for the form fields
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _wattsLimitController = TextEditingController();
 
-  // Toggle for power settings
   bool _isWattsLimitEnabled = false;
 
-  // Firebase references
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // For storing the user's avatar in base64
   String? _avatarBase64;
 
   @override
@@ -34,7 +31,13 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadUserData();
   }
 
-  // Fetch user profile data from Firestore
+  void _showConsumptionCalculator(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => ConsumptionCalculatorModal(),
+    );
+  }
+
   Future<void> _loadUserData() async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
@@ -56,7 +59,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Pick an image from the gallery, then store it in Firestore as base64
   Future<void> _pickAvatarImage() async {
     try {
       final picker = ImagePicker();
@@ -66,11 +68,9 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       if (pickedImage == null) return;
 
-      // Convert to bytes, then to base64
       final bytes = await File(pickedImage.path).readAsBytes();
       final base64String = base64Encode(bytes);
 
-      // Update state and Firestore
       setState(() {
         _avatarBase64 = base64String;
       });
@@ -86,7 +86,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Save the updated profile data to Firestore
   Future<void> _saveProfile() async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
@@ -98,9 +97,6 @@ class _ProfilePageState extends State<ProfilePage> {
           'wattsLimit': int.tryParse(_wattsLimitController.text) ?? 0,
           'isWattsLimitEnabled': _isWattsLimitEnabled,
           'email': currentUser.email,
-          // We already store avatarBase64 separately in _pickAvatarImage(),
-          // but you could also store it here if needed:
-          // 'avatarBase64': _avatarBase64,
         },
         SetOptions(merge: true),
       );
@@ -122,10 +118,8 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Build the main UI
   @override
   Widget build(BuildContext context) {
-    // Decode avatar if available
     Widget avatarWidget;
     if (_avatarBase64 != null && _avatarBase64!.isNotEmpty) {
       final decodedBytes = base64Decode(_avatarBase64!);
@@ -167,7 +161,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       body: Stack(
         children: [
-          // Full-screen gradient background
           Container(
             width: double.infinity,
             height: double.infinity,
@@ -179,7 +172,6 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
           ),
-          // Foreground content
           SafeArea(
             child: SingleChildScrollView(
               child: Center(
@@ -187,24 +179,24 @@ class _ProfilePageState extends State<ProfilePage> {
                   constraints: const BoxConstraints(maxWidth: 600),
                   child: Column(
                     children: [
-                      const SizedBox(height: 40),
-                      // Avatar + Upload Button
                       Stack(
                         alignment: Alignment.bottomRight,
                         children: [
                           avatarWidget,
                           IconButton(
-                            icon: const Icon(Icons.camera_alt, color: Colors.white),
+                            icon: const Icon(
+                                Icons.camera_alt, color: Colors.white),
                             onPressed: _pickAvatarImage,
                           ),
                         ],
                       ),
                       const SizedBox(height: 30),
 
-                      // First card: name/email
                       Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15)),
                         elevation: 5,
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -227,7 +219,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      _auth.currentUser?.email ?? "Not available",
+                                      _auth.currentUser?.email ??
+                                          "Not available",
                                       style: const TextStyle(fontSize: 16),
                                     ),
                                   ),
@@ -238,7 +231,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
 
-                      // Second card: power settings
                       Card(
                         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -284,14 +276,33 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 15),
+
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () => _showConsumptionCalculator(context),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    backgroundColor: Colors.orange,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Open Consumption Calculator',
+                                    style: TextStyle(fontSize: 16, color: Colors.white),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
 
-                      // Save button
                       Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 20),
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _saveProfile,

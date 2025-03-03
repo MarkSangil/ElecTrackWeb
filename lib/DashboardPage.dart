@@ -21,6 +21,8 @@ class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _applianceController = TextEditingController();
   final TextEditingController _wattsController = TextEditingController();
 
+  double _totalConsumption = 0.0;
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
@@ -350,12 +352,26 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildTotalConsumptionDisplay() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        "Total Consumption: ${_totalConsumption.toStringAsFixed(2)} kWh",
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
+
   List<QueryDocumentSnapshot> _filterDocs(
-      List<QueryDocumentSnapshot> docs,
-      String filterType,
-      ) {
+      List<QueryDocumentSnapshot> docs, String filterType) {
     final now = DateTime.now();
-    return docs.where((doc) {
+    double newTotalConsumption = 0.0;
+
+    final filteredDocs = docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final dateStr = data['date'] as String? ?? '';
       final parts = dateStr.split('-');
@@ -365,22 +381,43 @@ class _DashboardPageState extends State<DashboardPage> {
       final day = int.tryParse(parts[2]) ?? 0;
       final docDate = DateTime(year, month, day);
 
+      bool isValid = false;
+
       switch (filterType) {
         case 'Day':
-          return (docDate.year == now.year &&
+          isValid = (docDate.year == now.year &&
               docDate.month == now.month &&
               docDate.day == now.day);
+          break;
         case 'Week':
           final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
           final endOfWeek = startOfWeek.add(const Duration(days: 7));
-          return (docDate.isAtSameMomentAs(startOfWeek) ||
+          isValid = (docDate.isAtSameMomentAs(startOfWeek) ||
               (docDate.isAfter(startOfWeek) && docDate.isBefore(endOfWeek)));
+          break;
         case 'Month':
-          return (docDate.year == now.year && docDate.month == now.month);
-        default:
-          return true;
+          isValid = (docDate.year == now.year && docDate.month == now.month);
+          break;
       }
+
+      if (isValid) {
+        newTotalConsumption += (data['consumption'] as num? ?? 0).toDouble();
+      }
+
+      return isValid;
     }).toList();
+
+    if (newTotalConsumption != _totalConsumption) {
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _totalConsumption = newTotalConsumption;
+          });
+        }
+      });
+    }
+
+    return filteredDocs;
   }
 
   Widget _buildMainContent(BuildContext context) {
@@ -392,6 +429,7 @@ class _DashboardPageState extends State<DashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildFilterDropdown(),
+        _buildTotalConsumptionDisplay(),
         Expanded(
           child: Center(
             child: ConstrainedBox(
@@ -412,21 +450,33 @@ class _DashboardPageState extends State<DashboardPage> {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
-                        return const Center(child: Text('Something went wrong'));
+                        return const Center(child: Text(
+                            'Something went wrong'));
                       }
                       if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        Future.microtask(() {
+                          if (mounted && _totalConsumption != 0) {
+                            setState(() {
+                              _totalConsumption = 0;
+                            });
+                          }
+                        });
+
                         return const Center(
                           child: Text(
                             "No appliances found",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         );
                       }
+
                       final allDocs = snapshot.data!.docs;
                       final filteredDocs = _filterDocs(allDocs, _selectedFilter);
 
                       if (filteredDocs.isEmpty) {
-                        return const Center(child: Text('No data for this filter.'));
+                        return const Center(child: Text(
+                            'No data for this filter.'));
                       }
 
                       return Scrollbar(
@@ -439,7 +489,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(minWidth: 1200),
                             child: DataTable(
-                              headingRowColor: MaterialStateProperty.all(AppTheme.lightGreen),
+                              headingRowColor: MaterialStateProperty.all(
+                                  AppTheme.lightGreen),
                               headingTextStyle: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -458,20 +509,26 @@ class _DashboardPageState extends State<DashboardPage> {
                                 return DataRow(
                                   cells: [
                                     DataCell(Text(data['appliance'] ?? '')),
-                                    DataCell(Text((data['watts'] ?? 0).toString())),
+                                    DataCell(
+                                        Text((data['watts'] ?? 0).toString())),
                                     DataCell(Text(data['time'] ?? '')),
-                                    DataCell(Text((data['consumption'] ?? 0).toStringAsFixed(2))),
+                                    DataCell(Text((data['consumption'] ?? 0)
+                                        .toStringAsFixed(2))),
                                     DataCell(Text(data['date'] ?? '')),
                                     DataCell(
                                       Row(
                                         children: [
                                           IconButton(
-                                            icon: const Icon(Icons.delete, color: Colors.red),
-                                            onPressed: () => _deleteAppliance(docId),
+                                            icon: const Icon(Icons.delete,
+                                                color: Colors.red),
+                                            onPressed: () =>
+                                                _deleteAppliance(docId),
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.timer, color: Colors.blue),
-                                            onPressed: () => _openTimerPage(docId, data),
+                                            icon: const Icon(Icons.timer,
+                                                color: Colors.blue),
+                                            onPressed: () =>
+                                                _openTimerPage(docId, data),
                                           ),
                                         ],
                                       ),
@@ -494,7 +551,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isWide = screenWidth > 800;
