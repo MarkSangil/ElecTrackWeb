@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:my_flutter_web_app/ChatBotScreen.dart';
 import 'package:my_flutter_web_app/dashboard_service.dart';
 import 'package:my_flutter_web_app/consumption_alert_service.dart';
 import 'package:my_flutter_web_app/app_theme.dart';
@@ -45,6 +46,27 @@ class _DashboardPageState extends State<DashboardPage> {
     _wattsController.dispose();
     _tableScrollController.dispose();
     super.dispose();
+  }
+
+  void _showCompactChatbotModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 8),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            height: MediaQuery.of(context).size.height * 0.8,
+            child: SingleChildScrollView(
+              child: ChatbotContent(), // now has no top-level Material
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchWattsLimit() async {
@@ -304,6 +326,13 @@ class _DashboardPageState extends State<DashboardPage> {
             leading: const Icon(Icons.add, color: Colors.white),
             title: const Text('Add Appliance', style: TextStyle(color: Colors.white)),
             onTap: () => _showAddApplianceDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.calendar_month, color: Colors.white),
+            title: const Text('Consumption Calendar', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pushNamed(context, '/Chart');
+            },
           ),
           ListTile(
             leading: const Icon(Icons.person, color: Colors.white),
@@ -575,11 +604,11 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showAddApplianceDialog(context),
-            backgroundColor: AppTheme.lightGreen,
-            child: const Icon(Icons.add),
-          ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () => _showCompactChatbotModal(context),
+              backgroundColor: AppTheme.lightGreen,
+              child: const Icon(Icons.chat),
+            ),
         ),
       );
     } else {
@@ -681,9 +710,9 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
           floatingActionButton: FloatingActionButton(
-            onPressed: () => _showAddApplianceDialog(context),
-            backgroundColor: AppTheme.lightGreen,
-            child: const Icon(Icons.add),
+            onPressed: () => _showCompactChatbotModal(context),
+            backgroundColor: Colors.green,
+            child: const Icon(Icons.chat),
           ),
         ),
       );

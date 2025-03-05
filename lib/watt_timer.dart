@@ -80,38 +80,31 @@ class _WattTimerState extends State<WattTimer> {
 
   /// When resetting, we increment the existing 'consumption' in the doc.
   Future<void> _resetTimer() async {
+    // Cancel any running timer
     _timer?.cancel();
+
     setState(() {
       _isRunning = false;
+      // Reset the local timer so the next Start is fresh
+      _elapsed = Duration.zero;
     });
 
-    final usage = currentConsumption;
-    debugPrint('Reset pressed. currentConsumption: $usage');
-
-    // Only update if there's some usage
-    if (usage > 0) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('appliances')
-            .doc(widget.docId);
-
-        // If you want to *overwrite* consumption instead of incrementing:
-        // await docRef.update({'consumption': usage});
-        //
-        // If you want to add the usage to the existing consumption:
-        await docRef.update({
-          'consumption': FieldValue.increment(usage),
-        }).catchError((error) {
-          debugPrint('Error updating consumption: $error');
-        });
-      }
-    }
-
-    // Finally reset local timer
-    setState(() => _elapsed = Duration.zero);
+    // Remove or comment out the Firebase update logic:
+    // final usage = currentConsumption;
+    // if (usage > 0) {
+    //   final user = FirebaseAuth.instance.currentUser;
+    //   if (user != null) {
+    //     final docRef = FirebaseFirestore.instance
+    //         .collection('users')
+    //         .doc(user.uid)
+    //         .collection('appliances')
+    //         .doc(widget.docId);
+    //
+    //     await docRef.update({
+    //       'consumption': FieldValue.increment(usage),
+    //     });
+    //   }
+    // }
   }
 
   /// Compute consumption in kWh: (wattRating / 1000) * hours.
