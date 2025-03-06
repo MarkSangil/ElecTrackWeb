@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_flutter_web_app/ChatBotScreen.dart';
-import 'package:my_flutter_web_app/dashboard_service.dart';
-import 'package:my_flutter_web_app/consumption_alert_service.dart';
 import 'package:my_flutter_web_app/app_theme.dart';
+import 'package:my_flutter_web_app/consumption_alert_service.dart';
+import 'package:my_flutter_web_app/dashboard_service.dart';
 import 'package:my_flutter_web_app/watt_timer.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -56,19 +56,15 @@ class _DashboardPageState extends State<DashboardPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 8),
-          content: SizedBox(
+          content: Container(
             width: MediaQuery.of(context).size.width * 0.8,
             height: MediaQuery.of(context).size.height * 0.8,
-            child: SingleChildScrollView(
-              child: ChatbotContent(), // now has no top-level Material
-            ),
+            child: ChatbotContent(),
           ),
         );
       },
     );
   }
-
   Future<void> _fetchWattsLimit() async {
     final limit = await _dashboardService.fetchWattsLimit();
     setState(() {
@@ -580,143 +576,50 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isWide = screenWidth > 800;
 
-    if (isWide) {
-      return WillPopScope(
-        onWillPop: () async {
-          await FirebaseAuth.instance.signOut();
-          Navigator.of(context).pop();
-          return false;
-        },
-        child: Scaffold(
-          body: Row(
-            children: [
-              _buildSidebar(context),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildMainContent(context),
-                ),
-              ),
-            ],
+    return WillPopScope(
+      onWillPop: () async {
+        await FirebaseAuth.instance.signOut();
+        Navigator.of(context).pop();
+        return false;
+      },
+      child: Scaffold(
+        // Use an AppBar only for mobile devices
+        appBar: isWide
+            ? null
+            : AppBar(
+          title: const Text(
+            'ElecTrack',
+            style: TextStyle(color: Colors.white),
           ),
-            floatingActionButton: FloatingActionButton(
-              onPressed: () => _showCompactChatbotModal(context),
-              backgroundColor: AppTheme.lightGreen,
-              child: const Icon(Icons.chat),
-            ),
+          elevation: 5,
         ),
-      );
-    } else {
-      return WillPopScope(
-        onWillPop: () async {
-          await FirebaseAuth.instance.signOut();
-          Navigator.of(context).pop();
-          return false;
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('ElecTrack', style: TextStyle(color: Colors.white)),
-            elevation: 5,
-          ),
-          drawer: Drawer(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                Container(
-                  height: 100,
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: AppTheme.primaryBlue),
-                  child: const Align(
-                    alignment: Alignment.bottomLeft,
-                    child: Text(
-                      'ElecTrack Menu',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                      ),
-                    ),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.add),
-                  title: const Text('Add Appliance'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showAddApplianceDialog(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.person),
-                  title: const Text('Profile'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/profile');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('Logout'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final shouldLogout = await _showLogoutConfirmationDialog(context);
-                    if (shouldLogout) {
-                      await FirebaseAuth.instance.signOut();
-                      Navigator.pushReplacementNamed(context, '/');
-                    }
-                  },
-                ),
-              ],
+        // Use the same _buildSidebar widget inside a Drawer for mobile
+        drawer: isWide ? null : Drawer(child: _buildSidebar(context)),
+        body: isWide
+            ? Row(
+          children: [
+            _buildSidebar(context),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _buildMainContent(context),
+              ),
             ),
-          ),
-          body: Stack(
-            children: [
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: const AssetImage('assets/ElecTrack.png'),
-                      fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(
-                        Colors.white.withOpacity(0.7),
-                        BlendMode.lighten,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: _buildMainContent(context),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showCompactChatbotModal(context),
-            backgroundColor: Colors.green,
-            child: const Icon(Icons.chat),
-          ),
+          ],
+        )
+            : _buildMainContent(context),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showCompactChatbotModal(context),
+          backgroundColor: isWide ? AppTheme.lightGreen : Colors.green,
+          child: const Icon(Icons.chat),
         ),
-      );
-    }
+      ),
+    );
   }
 }
 

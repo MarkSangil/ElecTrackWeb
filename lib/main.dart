@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:my_flutter_web_app/AdminDashboard.dart';
 import 'package:my_flutter_web_app/ConsumptionChartPage.dart';
 import 'package:my_flutter_web_app/DashboardPage.dart';
 import 'package:my_flutter_web_app/LoginPage.dart';
@@ -32,6 +33,7 @@ class MyApp extends StatelessWidget {
         '/dashboard': (context) => const DashboardPage(),
         '/profile': (context) => const ProfilePage(),
         '/Chart': (context) => const ConsumptionCalendarPage(),
+        '/adminDashboard': (context) => const AdminDashboardPage(),
       },
     );
   }

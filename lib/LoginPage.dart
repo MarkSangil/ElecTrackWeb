@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -10,10 +11,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   bool _isLoading = false;
@@ -27,6 +26,15 @@ class _LoginPageState extends State<LoginPage> {
   static const Color darkBlue = Color(0xFF00018D);
 
   @override
+  void initState() {
+    super.initState();
+
+    // Clear fields when the LoginPage is built
+    _emailController.clear();
+    _passwordController.clear();
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -38,13 +46,66 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _isLoading = true);
 
       try {
-        await _auth.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+        final typedEmail = _emailController.text.trim();
+        final typedPassword = _passwordController.text;
+
+        // 1) Check if the typed creds match the single admin doc
+        await FirebaseAuth.instance.signInAnonymously();
+        final adminDoc = await FirebaseFirestore.instance
+            .collection('admin')
+            .doc('JiLwbnNdP0FwBKGmDSiD')
+            .get();
+
+        // If the doc read is successful (no PERMISSION_DENIED), proceed
+        if (adminDoc.exists) {
+          final adminEmail = adminDoc['email'] as String;
+          final adminPassword = adminDoc['password'] as String;
+
+          if (typedEmail == adminEmail && typedPassword == adminPassword) {
+            // Condition 1: Admin credentials match
+            _emailController.clear();
+            _passwordController.clear();
+            Navigator.pushReplacementNamed(context, '/adminDashboard');
+            return; // Stop here
+          }
+        }
+
+        // 2) Not admin, so check if this email is in the "users" collection
+        //    We assume your 'users' docs each have a field "email" storing the user's email
+        final userQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: typedEmail)
+            .limit(1)
+            .get();
+
+        if (userQuery.docs.isNotEmpty) {
+          // Condition 2: The email exists in 'users', so attempt Firebase Auth sign-in
+          await _auth.signInWithEmailAndPassword(
+            email: typedEmail,
+            password: typedPassword,
+          );
+          _emailController.clear();
+          _passwordController.clear();
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        } else {
+          // Condition 3: Not admin & not in users => show error
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No account found for these credentials.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } on FirebaseException catch (e) {
+        // Firestore or Auth error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to log in: ${e.message}'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
-        // Navigate to dashboard
-        Navigator.pushNamed(context, '/dashboard');
       } catch (e) {
+        // Other errors
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to log in. Please check your credentials and try again.'),
@@ -103,7 +164,7 @@ class _LoginPageState extends State<LoginPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           const Text(
-                            "ElecTrack",
+                            "Electrack",
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -144,8 +205,9 @@ class _LoginPageState extends State<LoginPage> {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!value.contains('@')) {
-                                return 'Please enter a valid email';
+                              // If user typed exactly "admin", skip the '@' check
+                              if (value != 'admin' && !value.contains('@')) {
+                                return 'Please enter a valid email or "admin"';
                               }
                               return null;
                             },
@@ -190,6 +252,21 @@ class _LoginPageState extends State<LoginPage> {
                               }
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Forgot password
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {
+                                // Handle forgot password
+                              },
+                              child: const Text(
+                                'Forgot Password?',
+                                style: TextStyle(color: primaryBlue),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 24),
 
