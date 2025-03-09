@@ -13,6 +13,8 @@ class _ChatbotContentState extends State<ChatbotContent> {
   final TextEditingController _messageController = TextEditingController();
   String? conversationId;
   String? currentUserEmail;
+  int _notHelpfulCount = 0;
+  bool _showChat = false;
 
   final List<Map<String, dynamic>> faqList = [
     {
@@ -93,100 +95,112 @@ class _ChatbotContentState extends State<ChatbotContent> {
         .orderBy('timestamp', descending: false)
         .snapshots();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1) Header Row with "Chatbot FAQ" and Close Button
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Chatbot FAQ',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+    return SizedBox(
+      width: MediaQuery.of(context).size.width * 0.8,
+      height: MediaQuery.of(context).size.height * 0.8,
+      child: Column(
+        children: [
+          // Title row (FAQ heading + close button)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Chatbot FAQ',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
           ),
-        ),
 
-        // 2) FAQ List
-        _buildFaqList(),
-        const Divider(),
+          // FAQ List (scrollable if needed)
+          Expanded(
+            child: SingleChildScrollView(
+              child: _buildFaqList(),
+            ),
+          ),
 
-        // 3) Messages List (fixed height to avoid overflow)
-        Container(
-          height: 300,
-          child: StreamBuilder<QuerySnapshot>(
-            stream: messagesStream,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final docs = snapshot.data!.docs;
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
-                  final sender = data['sender'] ?? '';
-                  final text = data['text'] ?? '';
-                  final isAdmin = sender == 'admin';
-                  return Container(
-                    alignment:
-                    isAdmin ? Alignment.centerLeft : Alignment.centerRight,
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isAdmin ? Colors.grey[300] : Colors.blue[200],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(text),
-                    ),
+          // Only show the chat if _showChat is true
+          if (_showChat) ...[
+            const Divider(),
+
+            // Messages list
+            SizedBox(
+              height: 300, // or use Expanded if you want dynamic sizing
+              child: StreamBuilder<QuerySnapshot>(
+                stream: messagesStream,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final docs = snapshot.data!.docs;
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final sender = data['sender'] ?? '';
+                      final text = data['text'] ?? '';
+                      final isAdmin = sender == 'admin';
+                      return Container(
+                        alignment: isAdmin
+                            ? Alignment.centerLeft
+                            : Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isAdmin ? Colors.grey[300] : Colors.blue[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(text),
+                        ),
+                      );
+                    },
                   );
                 },
-              );
-            },
-          ),
-        ),
+              ),
+            ),
 
-        // 4) Message Input
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: "Type a message...",
-                    border: OutlineInputBorder(),
+            // Text input row
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: const InputDecoration(
+                        hintText: "Type a message...",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                   ),
-                ),
+                  IconButton(
+                    icon: const Icon(Icons.send),
+                    onPressed: () async {
+                      final text = _messageController.text.trim();
+                      if (text.isNotEmpty) {
+                        await _sendMessage(text);
+                        _messageController.clear();
+                      }
+                    },
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: () async {
-                  final text = _messageController.text.trim();
-                  if (text.isNotEmpty) {
-                    await _sendMessage(text);
-                    _messageController.clear();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -203,6 +217,7 @@ class _ChatbotContentState extends State<ChatbotContent> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             children: [
+              // Steps
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
@@ -212,13 +227,50 @@ class _ChatbotContentState extends State<ChatbotContent> {
                       .toList(),
                 ),
               ),
+              // "Send this question" button
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () async {
+                    // Send question to chat
                     await _sendMessage(qItem['question']);
                   },
                   child: const Text("Send this question"),
+                ),
+              ),
+              // Ask if helpful + Yes/No buttons
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const Text("Is this answer helpful?"),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        // Optional: do something if user clicks "Yes"
+                        // e.g. reset the counter or just close the tile
+                        setState(() {
+                          // Example: reset the counter
+                          _notHelpfulCount = 0;
+                        });
+                      },
+                      child: const Text("Yes"),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        // Increment not helpful count
+                        setState(() {
+                          _notHelpfulCount++;
+                          if (_notHelpfulCount >= 3) {
+                            // Show chat after 3 "No"s
+                            _showChat = true;
+                          }
+                        });
+                      },
+                      child: const Text("No"),
+                    ),
+                  ],
                 ),
               ),
             ],

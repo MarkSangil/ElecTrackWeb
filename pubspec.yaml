@@ -20,7 +20,7 @@ dependencies:
   table_calendar: ^3.0.0
   syncfusion_flutter_calendar: ^28.1.33
   calendar_view: ^1.4.0
-
+  duration_picker: ^1.2.0
 
 dev_dependencies:
   flutter_test:
