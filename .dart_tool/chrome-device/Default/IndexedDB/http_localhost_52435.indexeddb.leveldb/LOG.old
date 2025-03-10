@@ -1,0 +1,19 @@
+2025/03/09-10:35:04.061 b003 Reusing MANIFEST /private/var/folders/q7/l7cmgkp93jnffbwx7wx_dxcr0000gn/T/flutter_tools.0Hxj9O/flutter_tools_chrome_device.QweNdq/Default/IndexedDB/http_localhost_52435.indexeddb.leveldb/MANIFEST-000001
+2025/03/09-10:35:04.064 b003 Recovering log #3
+2025/03/09-10:35:04.064 b003 Reusing old log /private/var/folders/q7/l7cmgkp93jnffbwx7wx_dxcr0000gn/T/flutter_tools.0Hxj9O/flutter_tools_chrome_device.QweNdq/Default/IndexedDB/http_localhost_52435.indexeddb.leveldb/000003.log 
+2025/03/09-10:35:04.118 8503 Level-0 table #5: started
+2025/03/09-10:35:04.120 8503 Level-0 table #5: 5349 bytes OK
+2025/03/09-10:35:04.124 8503 Delete type=0 #3
+2025/03/09-10:35:04.124 8503 Manual compaction at level-0 from '\x00\x04\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x05\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/09-10:56:57.645 8503 Level-0 table #7: started
+2025/03/09-10:56:57.655 8503 Level-0 table #7: 5454 bytes OK
+2025/03/09-10:56:57.661 8503 Delete type=0 #4
+2025/03/09-10:56:57.666 8503 Manual compaction at level-0 from (begin) .. (end); will stop at (end)
+2025/03/09-10:56:57.667 8503 Manual compaction at level-1 from (begin) .. (end); will stop at '\x00\x02\x01\x02\x01C\x00f\x00i\x00r\x00e\x00b\x00a\x00s\x00e\x00:\x00a\x00u\x00t\x00h\x00U\x00s\x00e\x00r\x00:\x00A\x00I\x00z\x00a\x00S\x00y\x00D\x00E\x00r\x00N\x00v\x00l\x00M\x00f\x00J\x00I\x00d\x00G\x00N\x00k\x00K\x00m\x006\x007\x005\x00k\x00K\x00l\x00R\x00G\x00g\x003\x00F\x00o\x004\x00_\x00g\x00-\x00w\x00:\x00[\x00D\x00E\x00F\x00A\x00U\x00L\x00T\x00]' @ 191 : 1
+2025/03/09-10:56:57.667 8503 Compacting 1@1 + 1@2 files
+2025/03/09-10:56:57.669 8503 Generated table #8@1: 36 keys, 2672 bytes
+2025/03/09-10:56:57.669 8503 Compacted 1@1 + 1@2 files => 2672 bytes
+2025/03/09-10:56:57.675 8503 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/03/09-10:56:57.678 8503 Delete type=2 #7
+2025/03/09-10:56:57.687 8503 Delete type=2 #5
+2025/03/09-10:56:57.690 8503 Manual compaction at level-1 from '\x00\x02\x01\x02\x01C\x00f\x00i\x00r\x00e\x00b\x00a\x00s\x00e\x00:\x00a\x00u\x00t\x00h\x00U\x00s\x00e\x00r\x00:\x00A\x00I\x00z\x00a\x00S\x00y\x00D\x00E\x00r\x00N\x00v\x00l\x00M\x00f\x00J\x00I\x00d\x00G\x00N\x00k\x00K\x00m\x006\x007\x005\x00k\x00K\x00l\x00R\x00G\x00g\x003\x00F\x00o\x004\x00_\x00g\x00-\x00w\x00:\x00[\x00D\x00E\x00F\x00A\x00U\x00L\x00T\x00]' @ 191 : 1 .. (end); will stop at (end)

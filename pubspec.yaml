@@ -1,0 +1,33 @@
+name: my_flutter_web_app
+description: "A new Flutter project."
+publish_to: 'none'  # Prevents accidental publication to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: "^3.5.2"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  firebase_storage: ^12.1.1
+  firebase_core: ^3.2.0
+  firebase_auth: ^5.1.2
+  cloud_firestore: ^5.0.2
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
+  table_calendar: ^3.0.0
+  syncfusion_flutter_calendar: ^28.1.33
+  calendar_view: ^1.4.0
+  duration_picker: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
