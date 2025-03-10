@@ -204,4 +204,89 @@ class _ChatbotContentState extends State<ChatbotContent> {
     );
   }
 
+  Widget _buildFaqList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1) "note: reaching concern to Admin may take time"
+        const Text("1) Note: reaching concern to Admin may take time"),
+        // 2) "strictly concerns related to ElecTrock will only be accommodated"
+        const Text("2) Strictly concerns related to ElecTrock will only be accommodated"),
+        // 3) "Admin is available from 9am - 12nn only"
+        const Text("3) Admin is available from 9am - 12nn only"),
+        const SizedBox(height: 16), // spacing before the FAQ cards
+
+        // Now map over the faqList to build your FAQ cards
+        ...faqList.map((qItem) {
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: ExpansionTile(
+              title: Text(
+                qItem['question'],
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              children: [
+                // Steps
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: (qItem['steps'] as List<dynamic>)
+                        .map((step) => Text(step))
+                        .toList(),
+                  ),
+                ),
+                // "Send this question" button
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () async {
+                      // Send question to chat
+                      await _sendMessage(qItem['question']);
+                    },
+                    child: const Text("Send this question"),
+                  ),
+                ),
+                // Ask if helpful + Yes/No buttons
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const Text("Is this answer helpful?"),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () {
+                          // Optional: do something if user clicks "Yes"
+                          setState(() {
+                            // Example: reset the counter
+                            _notHelpfulCount = 0;
+                          });
+                        },
+                        child: const Text("Yes"),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          // Increment not helpful count
+                          setState(() {
+                            _notHelpfulCount++;
+                            if (_notHelpfulCount >= 3) {
+                              // Show chat after 3 "No"s
+                              _showChat = true;
+                            }
+                          });
+                        },
+                        child: const Text("No"),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
 }
