@@ -516,24 +516,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildComputeBillRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        ElevatedButton(
-          onPressed: _calculateBill,
-          child: const Text('Compute Bill'),
-        ),
-        const SizedBox(width: 16),
-        if (_billAmount != null)
-          Text(
-            'Total Bill: ₱${_billAmount!.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-      ],
-    );
-  }
-
   List<QueryDocumentSnapshot> _filterDocs(
       List<QueryDocumentSnapshot> docs,
       String filterType,
@@ -753,8 +735,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        _buildComputeBillRow(),
       ],
     );
   }
